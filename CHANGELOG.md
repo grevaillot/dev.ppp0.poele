@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.1 — 2026-11-21
+
+- Arrêt programmé : permis s'il tombe dans le programme en cours (écourte la chauffe), refusé seulement s'il tombe dans un programme à venir.
+- Arrêt programmé : durée réglée au −/+ seulement (raccourcis 30 min…4 h retirés), carte placée en bas de l'accueil.
+
 ## v1.2.0 — 2026-11-21
 
 - Surveillance en arrière-plan toutes les 15 min : notification quand une alarme apparaît (désactivable dans Appareil).

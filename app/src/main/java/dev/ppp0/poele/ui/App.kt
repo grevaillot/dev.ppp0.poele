@@ -214,7 +214,6 @@ private fun HomeScreen(vm: StoveViewModel) {
                     note = if (vm.canWrite(Registers.FAN) || r[Registers.DUCT_CONFIG] == null) null else "Lecture seule sur cette canalisation")
             }
         }
-        item { TimerSection(vm) }
         item {
             Section("Dernières 24 h") {
                 val t = thermal
@@ -222,6 +221,7 @@ private fun HomeScreen(vm: StoveViewModel) {
                 else ThermalChart(t, Modifier.fillMaxWidth())
             }
         }
+        item { TimerSection(vm) }
     }
     ask?.let { on ->
         val refuse = vm.powerAllowed(on)

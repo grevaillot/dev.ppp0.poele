@@ -210,7 +210,7 @@ Releases publiées sur un dépôt GitHub **public**, configuré par `poele.updat
 - **Refus** si :
   - le poêle est éteint ;
   - le chrono global est désactivé (l'activer réveillerait les autres programmes) ;
-  - l'échéance tombe dans un programme actif ce jour-là, sur l'intervalle [démarrage, arrêt[ (sans arrêt : jusqu'à minuit) ;
+  - l'échéance tombe dans un programme **à venir** (pas encore commencé), sur son intervalle [démarrage, arrêt[ (sans arrêt : jusqu'à minuit). Tomber dans le programme **en cours** est permis : on écourte la chauffe programmée ;
   - l'horloge du poêle n'a pas encore été lue.
 - **Fin** : dès que l'échéance est passée de 2 min, le programme est **désactivé** (nom et emplacement gardés pour la prochaine fois). C'est fait au premier contrôle, appli ouverte ou surveillance en arrière-plan ; sinon il se répéterait chaque semaine. « Annuler » le désactive tout de suite.
 

@@ -77,9 +77,10 @@ class StoveOps(private val client: StoveClient, private val prefs: SharedPrefere
         val c = readChrono()
         check(c.enabled) { "La programmation horaire est désactivée : le poêle n'exécuterait pas l'arrêt. L'activer réveillerait aussi tes autres programmes." }
         val slot = OffTimer.slot(c.programs) ?: error("Aucun emplacement de programme libre (6 utilisés).")
-        val dl = OffTimer.deadline(now.plus(skew), minutes) // échéance sur l'horloge du poêle
-        val conflicts = OffTimer.conflicts(c.programs, slot, dl)
-        check(conflicts.isEmpty()) { "L'échéance (${ChronoRules.time(dl.hour, dl.minute / 15)}, heure du poêle) tombe dans un programme actif : ${conflicts.joinToString(", ")}." }
+        val stoveNowExact = now.plus(skew)
+        val dl = OffTimer.deadline(stoveNowExact, minutes) // échéance sur l'horloge du poêle
+        val conflicts = OffTimer.conflicts(c.programs, slot, dl, stoveNowExact)
+        check(conflicts.isEmpty()) { "L'échéance (${ChronoRules.time(dl.hour, dl.minute / 15)}, heure du poêle) tombe dans un programme à venir : ${conflicts.joinToString(", ")}." }
         val p = OffTimer.program(dl, regs[Registers.POWER] ?: 3)
         check(ChronoRules.validate(p).isEmpty()) { "Programme invalide : ${ChronoRules.validate(p)}" }
         writeChrono(c.copy(programs = c.programs.toMutableList().also { it[slot] = p }))

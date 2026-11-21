@@ -29,18 +29,22 @@ object OffTimer {
     fun dayBit(d: LocalDateTime) = 1 shl (d.dayOfWeek.value - 1)
 
     /**
-     * Programmes actifs (autres que la minuterie) dans lesquels tombe l'échéance.
+     * Programmes actifs (autres que la minuterie) dans lesquels tombe l'échéance, sauf celui qui tourne
+     * déjà ([now], même jour) : écourter la chauffe en cours est permis, couper un programme à venir non.
      * Intervalle actif : [début, arrêt[ ; un programme sans arrêt est actif du début à minuit ;
-     * un programme sans démarrage n'a pas d'intervalle actif.
+     * un programme sans démarrage n'a pas d'intervalle actif. Heures du poêle.
      */
-    fun conflicts(programs: List<Program?>, timerSlot: Int?, deadline: LocalDateTime): List<String> {
+    fun conflicts(programs: List<Program?>, timerSlot: Int?, deadline: LocalDateTime, now: LocalDateTime): List<String> {
         val bit = dayBit(deadline)
         val t = deadline.hour * 60 + deadline.minute
+        val sameDay = now.toLocalDate() == deadline.toLocalDate()
+        val n = now.hour * 60 + now.minute
         return programs.mapIndexedNotNull { i, p ->
             if (p == null || i == timerSlot || !p.enabled || !p.startOn || p.days and bit == 0) return@mapIndexedNotNull null
             val s = ChronoRules.minutes(p.sh, p.sq)
             val e = if (p.stopOn) ChronoRules.minutes(p.eh, p.eq) else 24 * 60
-            if (t in s until e) "« ${p.name} » (${ChronoRules.time(p.sh, p.sq)} → ${if (p.stopOn) ChronoRules.time(p.eh, p.eq) else "—"})" else null
+            val running = sameDay && n in s until e
+            if (t in s until e && !running) "« ${p.name} » (${ChronoRules.time(p.sh, p.sq)} → ${if (p.stopOn) ChronoRules.time(p.eh, p.eq) else "—"})" else null
         }
     }
 

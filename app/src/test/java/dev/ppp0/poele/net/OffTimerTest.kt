@@ -30,13 +30,21 @@ class OffTimerTest {
         assertNull(OffTimer.slot(List(6) { Program() }))
     }
 
-    @Test fun conflictsWithActiveProgramOnThatDay() {
-        assertEquals(1, OffTimer.conflicts(progs, 3, at(18, 0)).size)   // samedi 18:00 : dans « weekend soir »
-        assertTrue(OffTimer.conflicts(progs, 3, at(20, 0)).isEmpty())   // à l'arrêt du programme : pas dedans
-        assertTrue(OffTimer.conflicts(progs, 3, at(15, 0)).isEmpty())   // entre deux programmes
-        assertTrue(OffTimer.conflicts(progs, 3, at(7, 0)).isEmpty())    // « semaine matin » ne tourne pas le samedi
+    @Test fun refusesDeadlineInUpcomingProgram() {
+        val now = at(14, 0)
+        assertEquals(1, OffTimer.conflicts(progs, 3, at(18, 0), now).size)   // samedi 18:00 : « weekend soir » commence à 17:30
+        assertTrue(OffTimer.conflicts(progs, 3, at(20, 0), now).isEmpty())   // à l'arrêt du programme : pas dedans
+        assertTrue(OffTimer.conflicts(progs, 3, at(15, 0), now).isEmpty())   // entre deux programmes
+        assertTrue(OffTimer.conflicts(progs, 3, at(7, 0), now).isEmpty())    // « semaine matin » ne tourne pas le samedi
         val disabled = progs.toMutableList().also { it[1] = it[1]!!.copy(enabled = false) }
-        assertTrue(OffTimer.conflicts(disabled, 3, at(18, 0)).isEmpty())
+        assertTrue(OffTimer.conflicts(disabled, 3, at(18, 0), now).isEmpty())
+    }
+
+    @Test fun allowsCuttingTheRunningProgram() {
+        assertTrue(OffTimer.conflicts(progs, 3, at(18, 30), at(17, 45)).isEmpty()) // dans « weekend soir », déjà en cours
+        assertTrue(OffTimer.conflicts(progs, 3, at(9, 0), at(8, 10)).isEmpty())    // dans « weekend matin », en cours
+        // Le lendemain (dimanche) même heure : programme à venir, refusé.
+        assertEquals(1, OffTimer.conflicts(progs, 3, at(18, 30).plusDays(1), at(17, 45)).size)
     }
 
     @Test fun timerProgramIsStopOnlyOnDeadlineDay() {
