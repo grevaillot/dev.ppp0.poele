@@ -1,5 +1,6 @@
 package dev.ppp0.poele.net
 
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
@@ -9,8 +10,25 @@ import java.time.temporal.ChronoUnit
  * et désactive le programme dès que l'échéance est passée, sinon il se répéterait chaque semaine.
  */
 object OffTimer {
+    /** Préfixe du nom ; le nom complet porte la date de l'échéance (heure du poêle) : « AUTO-OFF 21/11 ». */
     const val NAME = "AUTO-OFF"
     const val MIN_MINUTES = 15
+    private val NAME_DATE = Regex("^$NAME (\\d{2})/(\\d{2})$")
+
+    fun name(deadline: LocalDateTime) = "%s %02d/%02d".format(NAME, deadline.dayOfMonth, deadline.monthValue)
+
+    fun isTimer(p: Program?) = p != null && (p.name == NAME || p.name.startsWith("$NAME "))
+
+    /**
+     * Date d'échéance lue dans le nom (jj/mm), rattachée à l'année qui la place au plus près de [today]
+     * (le 31/12, « 01/01 » est le lendemain, pas le 1er janvier passé). Null si le nom n'en porte pas.
+     */
+    fun nameDate(p: Program, today: LocalDate): LocalDate? {
+        val (d, m) = NAME_DATE.matchEntire(p.name)?.destructured ?: return null
+        return (today.year - 1..today.year + 1)
+            .mapNotNull { y -> runCatching { LocalDate.of(y, m.toInt(), d.toInt()) }.getOrNull() }
+            .minByOrNull { kotlin.math.abs(java.time.temporal.ChronoUnit.DAYS.between(today, it)) }
+    }
     const val MAX_MINUTES = 23 * 60 + 45
 
     /** Échéance : maintenant + [minutes], arrondie au quart d'heure supérieur. */
@@ -21,9 +39,9 @@ object OffTimer {
         return hour.plusMinutes(quarters * 15)
     }
 
-    /** Emplacement à utiliser : celui déjà nommé [NAME], sinon le premier libre ; null si aucun. */
+    /** Emplacement à utiliser : celui d'une minuterie existante (nom en [NAME]…), sinon le premier libre ; null si aucun. */
     fun slot(programs: List<Program?>): Int? =
-        programs.indexOfFirst { it?.name == NAME }.takeIf { it >= 0 } ?: programs.indexOf(null).takeIf { it >= 0 }
+        programs.indexOfFirst(::isTimer).takeIf { it >= 0 } ?: programs.indexOf(null).takeIf { it >= 0 }
 
     /** Bit du jour (0 = lundi … 6 = dimanche) d'une date. */
     fun dayBit(d: LocalDateTime) = 1 shl (d.dayOfWeek.value - 1)
@@ -49,7 +67,7 @@ object OffTimer {
     }
 
     fun program(deadline: LocalDateTime, power: Int) = Program(
-        name = NAME, enabled = true, startOn = false, sh = 0, sq = 0,
+        name = name(deadline), enabled = true, startOn = false, sh = 0, sq = 0,
         stopOn = true, eh = deadline.hour, eq = deadline.minute / 15,
         temp = 20, power = power.coerceIn(1, 5), days = dayBit(deadline),
     )

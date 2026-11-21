@@ -87,22 +87,34 @@ class StoveOps(private val client: StoveClient, private val prefs: SharedPrefere
         return TimerInfo(dl.minus(skew), dl, slot).also(::saveTimer)
     }
 
-    /** Désactive le programme de la minuterie (emplacement gardé, nom conservé) et oublie l'échéance. */
+    /** Désactive les programmes de minuterie actifs (emplacement et nom gardés) et oublie l'échéance. */
     suspend fun disableTimer() {
-        val c = readChrono()
-        val i = c.programs.indexOfFirst { it?.name == OffTimer.NAME }
-        if (i >= 0 && c.programs[i]!!.enabled) {
-            writeChrono(c.copy(programs = c.programs.toMutableList().also { it[i] = it[i]!!.copy(enabled = false) }))
-        }
+        disableTimers(readChrono()) { true }
         saveTimer(null)
     }
 
-    /** Désactive la minuterie si son échéance est passée (marge de 2 min). Renvoie true si c'est fait. */
-    suspend fun cleanupTimerIfDue(now: LocalDateTime = LocalDateTime.now()): Boolean {
-        val t = timer() ?: return false
-        if (now.isBefore(t.deadline.plusMinutes(2))) return false
-        disableTimer()
+    private suspend fun disableTimers(c: Chrono, which: (Program) -> Boolean): Boolean {
+        val idx = c.programs.indices.filter { i -> c.programs[i]?.let { OffTimer.isTimer(it) && it.enabled && which(it) } == true }
+        if (idx.isEmpty()) return false
+        writeChrono(c.copy(programs = c.programs.toMutableList().also { l -> idx.forEach { l[it] = l[it]!!.copy(enabled = false) } }))
         return true
+    }
+
+    /**
+     * Désactive la minuterie échue (marge de 2 min) : d'après l'échéance mémorisée, ou, sans elle
+     * (réinstallation, autre téléphone) et si [checkNames], d'après la date portée par le nom du programme,
+     * une fois ce jour passé. Renvoie true si une minuterie a été terminée.
+     */
+    suspend fun cleanupTimerIfDue(now: LocalDateTime = LocalDateTime.now(), checkNames: Boolean = false): Boolean {
+        val t = timer()
+        if (t != null) {
+            if (now.isBefore(t.deadline.plusMinutes(2))) return false
+            disableTimer()
+            return true
+        }
+        if (!checkNames) return false
+        val today = now.toLocalDate()
+        return disableTimers(readChrono()) { p -> OffTimer.nameDate(p, today)?.isBefore(today) == true }
     }
 
     companion object {

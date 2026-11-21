@@ -27,6 +27,7 @@ class OffTimerTest {
     @Test fun slotPrefersExistingTimerThenFirstFree() {
         assertEquals(3, OffTimer.slot(progs))
         assertEquals(5, OffTimer.slot(progs.toMutableList().also { it[5] = OffTimer.program(at(15, 0), 3).copy(enabled = false) }))
+        assertEquals(4, OffTimer.slot(progs.toMutableList().also { it[4] = Program(name = "AUTO-OFF 14/11", enabled = false) }))
         assertNull(OffTimer.slot(List(6) { Program() }))
     }
 
@@ -47,9 +48,23 @@ class OffTimerTest {
         assertEquals(1, OffTimer.conflicts(progs, 3, at(18, 30).plusDays(1), at(17, 45)).size)
     }
 
+    @Test fun nameCarriesDeadlineDate() {
+        assertEquals("AUTO-OFF 21/11", OffTimer.name(at(15, 45)))
+        assertTrue(OffTimer.name(at(15, 45)).length <= ChronoRules.NAME_MAX)
+        assertTrue(OffTimer.isTimer(Program(name = "AUTO-OFF 21/11")))
+        assertTrue(OffTimer.isTimer(Program(name = "AUTO-OFF")))          // nom de la v1.2.0/1.2.1
+        assertTrue(!OffTimer.isTimer(Program(name = "AUTO-OFFICE")))
+        val today = java.time.LocalDate.of(2026, 11, 21)
+        assertEquals(today, OffTimer.nameDate(Program(name = "AUTO-OFF 21/11"), today))
+        assertEquals(java.time.LocalDate.of(2025, 12, 31), OffTimer.nameDate(Program(name = "AUTO-OFF 31/12"), java.time.LocalDate.of(2026, 1, 2)))
+        assertEquals(java.time.LocalDate.of(2027, 1, 1), OffTimer.nameDate(Program(name = "AUTO-OFF 01/01"), java.time.LocalDate.of(2026, 12, 31))) // demain
+        assertNull(OffTimer.nameDate(Program(name = "AUTO-OFF"), today))
+        assertNull(OffTimer.nameDate(Program(name = "AUTO-OFF 31/02"), today))
+    }
+
     @Test fun timerProgramIsStopOnlyOnDeadlineDay() {
         val p = OffTimer.program(at(15, 45), 4)
-        assertEquals(OffTimer.NAME, p.name)
+        assertEquals("AUTO-OFF 21/11", p.name)
         assertEquals(false, p.startOn); assertEquals(true, p.stopOn)
         assertEquals(15, p.eh); assertEquals(3, p.eq)
         assertEquals(1 shl 5, p.days) // samedi

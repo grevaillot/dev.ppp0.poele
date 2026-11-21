@@ -215,7 +215,7 @@ private fun HomeScreen(vm: StoveViewModel) {
             }
         }
         item {
-            Section("Dernières 24 h") {
+            Section("Historique") {
                 val t = thermal
                 if (t == null) Text("Lecture…", style = MaterialTheme.typography.bodySmall)
                 else ThermalChart(t, Modifier.fillMaxWidth())

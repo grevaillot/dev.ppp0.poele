@@ -22,12 +22,10 @@ data class LogEntry(val time: LocalTime, val path: String, val params: String, v
  * corps form-urlencoded (avec l'en-tête attendu par le module), timeout 10 s, pas de redirection.
  */
 class StoveClient(@Volatile var host: String, @Volatile var network: Network?) {
-    private val mutex = Mutex()
-    private var lastStart = 0L
     private val _log = MutableStateFlow<List<LogEntry>>(emptyList())
     val log: StateFlow<List<LogEntry>> = _log
 
-    suspend fun post(path: String, params: Map<String, Any> = emptyMap()): JSONObject = mutex.withLock {
+    suspend fun post(path: String, params: Map<String, Any> = emptyMap()): JSONObject = MUTEX.withLock {
         val wait = MIN_GAP_MS - (System.currentTimeMillis() - lastStart)
         if (wait > 0) delay(wait)
         lastStart = System.currentTimeMillis()
@@ -45,9 +43,18 @@ class StoveClient(@Volatile var host: String, @Volatile var network: Network?) {
         }
     }
 
-    private fun request(path: String, body: String): JSONObject {
+    private fun request(path: String, body: String): JSONObject = try {
+        request(path, body, network)
+    } catch (e: java.net.SocketException) {
+        // « Binding socket to network … failed » : le réseau Wi-Fi mémorisé n'existe plus (reconnexion).
+        // On retente par la route par défaut du téléphone ; l'appelant reprendra le réseau courant.
+        if (network == null || e.message?.contains("Binding socket", ignoreCase = true) != true) throw e
+        request(path, body, null)
+    }
+
+    private fun request(path: String, body: String, net: Network?): JSONObject {
         val url = URL("http://$host$path")
-        val conn = (network?.openConnection(url) ?: url.openConnection()) as HttpURLConnection
+        val conn = (net?.openConnection(url) ?: url.openConnection()) as HttpURLConnection
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 5000
@@ -73,5 +80,8 @@ class StoveClient(@Volatile var host: String, @Volatile var network: Network?) {
 
     companion object {
         const val MIN_GAP_MS = 500L
+        /** Partagés par tous les clients du processus : l'appli et la surveillance ne parlent jamais au module en même temps. */
+        private val MUTEX = Mutex()
+        @Volatile private var lastStart = 0L
     }
 }

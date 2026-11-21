@@ -43,7 +43,7 @@ fun TimerSection(vm: StoveViewModel) {
             val left = Duration.between(LocalDateTime.now(), t.deadline).toMinutes().coerceAtLeast(0)
             Text("Arrêt à %02d:%02d".format(t.stoveDeadline.hour, t.stoveDeadline.minute), fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleLarge, color = StatusColors.running)
-            Text("dans ${hm(left.toInt())} · heure du poêle · programme ${OffTimer.NAME}", style = MaterialTheme.typography.bodySmall,
+            Text("dans ${hm(left.toInt())} · heure du poêle · programme ${OffTimer.name(t.stoveDeadline)}", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedButton(onClick = { askCancel = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Annuler l'arrêt programmé") }
         } else {
@@ -61,7 +61,7 @@ fun TimerSection(vm: StoveViewModel) {
         "Un programme ${OffTimer.NAME} va éteindre le poêle dans ${hm(minutes)} environ (horloge du poêle, arrondi au quart d'heure). " +
             "Il sera désactivé automatiquement une fois l'échéance passée.",
         "Programmer", { vm.scheduleOff(minutes) }) { ask = false }
-    if (askCancel) ConfirmDialog("Annuler l'arrêt programmé", "Le programme ${OffTimer.NAME} sera désactivé.", "Annuler l'arrêt",
+    if (askCancel) ConfirmDialog("Annuler l'arrêt programmé", "Le programme ${timer?.let { OffTimer.name(it.stoveDeadline) } ?: OffTimer.NAME} sera désactivé.", "Annuler l'arrêt",
         vm::cancelTimer) { askCancel = false }
 }
 

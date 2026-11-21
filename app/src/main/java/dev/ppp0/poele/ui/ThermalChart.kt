@@ -18,7 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import dev.ppp0.poele.net.Thermal
 
@@ -26,51 +29,59 @@ private val AIR = Color(0xFF1565C0)
 private val SET = Color(0xFFE65100)
 private val GRID = Color(0x1F000000)
 
-/** Ambiante (trait plein) et consigne (paliers pointillés) sur 24 h, de −24 h à maintenant. */
+/**
+ * Ambiante (trait plein) et consigne (pointillés), un échantillon toutes les 15 min, le dernier = maintenant.
+ * Les deux courbes sont tracées de la même façon, en paliers centrés sur chaque échantillon : ce qui est
+ * aligné dans les données l'est à l'écran. Repères aux heures réelles (00:00, 06:00, 12:00, 18:00).
+ */
 @Composable
 fun ThermalChart(t: Thermal, modifier: Modifier = Modifier) {
     val range = t.yRange()
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val small = MaterialTheme.typography.labelSmall
+    val small = MaterialTheme.typography.labelSmall.copy(color = muted)
+    val measurer = rememberTextMeasurer()
     Column(modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Legend(AIR, "ambiante", dashed = false)
             Legend(SET, "consigne", dashed = true)
+            Text("${t.spanMinutes / 60} h · pas de 15 min", style = small)
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            Column(Modifier.height(150.dp).padding(end = 6.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Text("${range.endInclusive.toInt()}°", style = small, color = muted)
-                Text("${((range.start + range.endInclusive) / 2).toInt()}°", style = small, color = muted)
-                Text("${range.start.toInt()}°", style = small, color = muted)
+        Canvas(Modifier.fillMaxWidth().height(180.dp).padding(top = 6.dp)) {
+            val left = 30.dp.toPx(); val bottom = 18.dp.toPx(); val top = 6.dp.toPx(); val right = 4.dp.toPx()
+            val w = size.width - left - right; val h = size.height - top - bottom
+            val n = maxOf(t.points, 1)
+            val step = w / n                                // largeur d'un échantillon
+            fun xc(i: Int) = left + step * (i + 0.5f)       // centre de l'échantillon i
+            fun y(v: Float) = top + h * (1 - (v - range.start) / (range.endInclusive - range.start))
+
+            val mid = (range.start + range.endInclusive) / 2
+            for (v in listOf(range.start, mid, range.endInclusive)) {
+                drawLine(GRID, Offset(left, y(v)), Offset(left + w, y(v)), 1f)
+                val lbl = measurer.measure("${v.toInt()}°", small)
+                drawText(lbl, topLeft = Offset(left - lbl.size.width - 4.dp.toPx(), y(v) - lbl.size.height / 2))
             }
-            Canvas(Modifier.weight(1f).height(150.dp)) {
-                val n = maxOf(t.air.size, t.setpoint.size, 2)
-                fun x(i: Int) = size.width * i / (n - 1)
-                fun y(v: Float) = size.height * (1 - (v - range.start) / (range.endInclusive - range.start))
-                // Grille : 3 horizontales, une verticale toutes les 6 h.
-                for (k in 0..2) { val gy = size.height * k / 2; drawLine(GRID, Offset(0f, gy), Offset(size.width, gy), 1f) }
-                for (h in listOf(6, 12, 18)) { val gx = size.width * h / 24; drawLine(GRID, Offset(gx, 0f), Offset(gx, size.height), 1f) }
-                // Consigne en paliers.
-                val sp = Path(); var open = false
-                t.setpoint.forEachIndexed { i, v ->
-                    if (v == null) { open = false; return@forEachIndexed }
-                    if (!open) { sp.moveTo(x(i), y(v)); open = true } else sp.lineTo(x(i), y(v))
-                    sp.lineTo(x(minOf(i + 1, n - 1)), y(v))
+            // Repères aux heures réelles (00:00 → date, 06:00, 12:00, 18:00), calculées depuis le dernier point.
+            for ((i, text) in t.ticks()) {
+                drawLine(GRID, Offset(xc(i), top), Offset(xc(i), top + h), 1f)
+                val lbl = measurer.measure(text, small)
+                val lx = (xc(i) - lbl.size.width / 2).coerceIn(left, left + w - lbl.size.width)
+                drawText(lbl, topLeft = Offset(lx, top + h + 2.dp.toPx()))
+            }
+
+            /** Paliers centrés : chaque échantillon couvre [i, i+1[ en largeur ; un trou coupe la courbe. */
+            fun steps(values: List<Float?>): Path {
+                val p = Path(); var prev: Float? = null
+                values.forEachIndexed { i, v ->
+                    val x0 = left + step * i; val x1 = x0 + step
+                    if (v == null) { prev = null; return@forEachIndexed }
+                    if (prev == null) p.moveTo(x0, y(v)) else p.lineTo(x0, y(v))
+                    p.lineTo(x1, y(v)); prev = v
                 }
-                drawPath(sp, SET, style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))
-                // Ambiante.
-                val ap = Path(); open = false
-                t.air.forEachIndexed { i, v ->
-                    if (v == null) { open = false; return@forEachIndexed }
-                    if (!open) { ap.moveTo(x(i), y(v)); open = true } else ap.lineTo(x(i), y(v))
-                }
-                drawPath(ap, AIR, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
+                return p
             }
-        }
-        Row(Modifier.fillMaxWidth().padding(start = 24.dp, top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf("−24 h", "−18 h", "−12 h", "−6 h", "maint.").forEach { s ->
-                Text(s, style = small, color = muted)
-            }
+            drawPath(steps(t.setpoint), SET, style = Stroke(2.dp.toPx(), join = StrokeJoin.Round,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))
+            drawPath(steps(t.air), AIR, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
 }

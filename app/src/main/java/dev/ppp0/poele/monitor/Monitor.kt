@@ -40,7 +40,7 @@ class MonitorWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
         return try {
             val ops = StoveOps(StoveClient(host, wifi.network), prefs)
             val s = ops.snapshot()
-            if (ops.cleanupTimerIfDue()) {
+            if (ops.cleanupTimerIfDue(checkNames = true)) {
                 Notifier.event(ctx, "Minuterie terminée", "Programme ${OffTimer.NAME} désactivé. État : ${Registers.status(s.status)}")
             }
             val alarm = s.alarm

@@ -204,7 +204,8 @@ Releases publiées sur un dépôt GitHub **public**, configuré par `poele.updat
 
 « Éteindre dans X » au moyen d'un programme chrono temporaire.
 
-- **Emplacement** : celui nommé `AUTO-OFF` s'il existe, sinon le premier libre. Refus si les 6 emplacements sont pris par d'autres programmes.
+- **Nom** : `AUTO-OFF jj/mm`, date de l'échéance sur l'horloge du poêle (14 caractères ASCII). Visible tel quel sur la télécommande.
+- **Emplacement** : celui d'une minuterie existante (nom commençant par `AUTO-OFF`, ancien nom sans date compris), sinon le premier libre. Refus si les 6 emplacements sont pris par d'autres programmes.
 - **Programme** : arrêt seul (pas de démarrage), à l'échéance, sur le seul jour de l'échéance. Puissance : celle du moment ; température : 20 °C (sans effet sur un arrêt).
 - **Échéance** : comptée sur l'**horloge du poêle**, qui exécute l'arrêt : heure du poêle + X, arrondie au quart d'heure supérieur. X va de 15 min à 23 h 45. Le téléphone mémorise l'échéance équivalente sur son horloge, en tenant compte de l'écart avec le poêle.
 - **Refus** si :
@@ -212,7 +213,7 @@ Releases publiées sur un dépôt GitHub **public**, configuré par `poele.updat
   - le chrono global est désactivé (l'activer réveillerait les autres programmes) ;
   - l'échéance tombe dans un programme **à venir** (pas encore commencé), sur son intervalle [démarrage, arrêt[ (sans arrêt : jusqu'à minuit). Tomber dans le programme **en cours** est permis : on écourte la chauffe programmée ;
   - l'horloge du poêle n'a pas encore été lue.
-- **Fin** : dès que l'échéance est passée de 2 min, le programme est **désactivé** (nom et emplacement gardés pour la prochaine fois). C'est fait au premier contrôle, appli ouverte ou surveillance en arrière-plan ; sinon il se répéterait chaque semaine. « Annuler » le désactive tout de suite.
+- **Fin** : dès que l'échéance est passée de 2 min, le programme est **désactivé** (nom et emplacement gardés pour la prochaine fois). C'est fait au premier contrôle, appli ouverte ou surveillance en arrière-plan ; sinon il se répéterait chaque semaine. Sans échéance mémorisée (réinstallation, autre téléphone), la surveillance désactive tout `AUTO-OFF` actif dont la date du nom est passée. « Annuler » le désactive tout de suite.
 
 ## 12. Surveillance en arrière-plan (v1.2)
 

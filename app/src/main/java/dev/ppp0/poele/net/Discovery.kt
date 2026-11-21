@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.net.DatagramPacket
@@ -98,5 +99,8 @@ object Discovery {
                 ),
             )
         }
-    }.flowOn(Dispatchers.IO)
+    }.flowOn(Dispatchers.IO).catch { e ->
+        // Wi-Fi pas prêt (liaison de la socket refusée), réseau perdu en cours de recherche… : échec affiché, pas de crash.
+        emit(DiscoveryEvent.Failure("Erreur réseau pendant la recherche (${e.message ?: e.javaClass.simpleName}). Réessaie dans un instant."))
+    }
 }

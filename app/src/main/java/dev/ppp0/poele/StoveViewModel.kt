@@ -164,8 +164,12 @@ class StoveViewModel(app: Application) : AndroidViewModel(app) {
                             lastError = if (s.lastError?.startsWith("Modèle") == true) s.lastError else null,
                         )
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     _state.update { it.copy(online = false, lastError = "Hors ligne : ${e.message}") }
+                    // Le Wi-Fi a pu se reconnecter : l'ancien réseau n'existe plus, on reprend le courant.
+                    WifiNet.current(getApplication()).let { w -> _wifi.value = w; client.network = w?.network }
                     delay(3000)
                 }
                 delay((1000 - (System.currentTimeMillis() - t0)).coerceAtLeast(0))
