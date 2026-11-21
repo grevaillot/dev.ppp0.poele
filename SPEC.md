@@ -20,7 +20,7 @@ L'appli officielle (`it.netsoftware.winetlauncher_ravelli_temp` 1.3.3) n'est qu'
 
 ### v2 (souhaitable)
 - Widget écran d'accueil (état + température), tuile Réglages rapides marche/arrêt.
-- Notification locale sur alarme (polling en arrière-plan, uniquement sur le Wi-Fi de la maison).
+- ~~Notification locale sur alarme~~ : fait en v1.2 (§12).
 - Courbe thermique (`key=035`).
 
 ### Hors périmètre
@@ -32,7 +32,7 @@ L'appli officielle (`it.netsoftware.winetlauncher_ravelli_temp` 1.3.3) n'est qu'
 | Sujet | Exigence |
 |---|---|
 | Réseau | Pilotage du poêle en local uniquement, aucune donnée du poêle ne sort du LAN. Pas d'analytics, pas de SDK tiers de tracking. **Seule sortie Internet** : la vérification de mise à jour (§10), une requête vers `api.github.com` au démarrage. |
-| Charge module | **≤ 2 requêtes/s**, **une seule requête en vol** (file d'attente), comme l'appli web d'origine. Polling suspendu quand l'appli n'est pas au premier plan. |
+| Charge module | **≤ 2 requêtes/s**, **une seule requête en vol** (file d'attente), comme l'appli web d'origine. Polling rapide suspendu quand l'appli n'est pas au premier plan ; en arrière-plan, un seul contrôle toutes les 15 min (§12). |
 | Timeouts | 10 s par requête ; état « hors ligne » visible ; reprise automatique. |
 | Écritures | Uniquement sur action explicite de l'utilisateur. Confirmation pour marche/arrêt, horloge, enregistrement/suppression de programmes. |
 | Plateforme | Kotlin, Jetpack Compose. **Systèmes récents uniquement** : minSdk 33 (Android 13+), compile/targetSdk 36 ou 37 selon le plugin Android Gradle disponible. Pas de rétrocompatibilité à maintenir. |
@@ -187,7 +187,7 @@ Plus deux infos issues de la découverte (§4.1) : l'**identifiant** (`WINET-0A1
 - Le module est trouvé en < 10 s sur le réseau de la maison, là où l'appli officielle échoue. Sinon, l'appli indique précisément quelle étape a échoué.
 - Les valeurs de l'accueil correspondent à la télécommande (état, consigne, puissance, ventilation).
 - Une modification de ventilation depuis l'appli apparaît sur la télécommande, et inversement, en < 1 min.
-- Aucune requête au-delà de 2/s mesurée sur 10 min ; aucune requête quand l'appli est en arrière-plan.
+- Aucune requête au-delà de 2/s mesurée sur 10 min ; en arrière-plan, uniquement le contrôle périodique (§12).
 - Aucune écriture sans action utilisateur (vérifiable dans le journal du diagnostic).
 
 ## 10. Mise à jour automatique
@@ -199,6 +199,29 @@ Releases publiées sur un dépôt GitHub **public**, configuré par `poele.updat
 - Android garantit en plus que la mise à jour est signée par la même clé (empreinte dans `RELEASING.md`).
 - Les builds de dev (`dev.ppp0.poele.debug`) ne proposent jamais de mise à jour.
 - L'écran Module affiche la version installée et l'état du dépôt, avec un bouton « Vérifier maintenant ».
+
+## 11. Arrêt programmé (expérimental, v1.2)
+
+« Éteindre dans X » au moyen d'un programme chrono temporaire.
+
+- **Emplacement** : celui nommé `AUTO-OFF` s'il existe, sinon le premier libre. Refus si les 6 emplacements sont pris par d'autres programmes.
+- **Programme** : arrêt seul (pas de démarrage), à l'échéance, sur le seul jour de l'échéance. Puissance : celle du moment ; température : 20 °C (sans effet sur un arrêt).
+- **Échéance** : comptée sur l'**horloge du poêle**, qui exécute l'arrêt : heure du poêle + X, arrondie au quart d'heure supérieur. X va de 15 min à 23 h 45. Le téléphone mémorise l'échéance équivalente sur son horloge, en tenant compte de l'écart avec le poêle.
+- **Refus** si :
+  - le poêle est éteint ;
+  - le chrono global est désactivé (l'activer réveillerait les autres programmes) ;
+  - l'échéance tombe dans un programme actif ce jour-là, sur l'intervalle [démarrage, arrêt[ (sans arrêt : jusqu'à minuit) ;
+  - l'horloge du poêle n'a pas encore été lue.
+- **Fin** : dès que l'échéance est passée de 2 min, le programme est **désactivé** (nom et emplacement gardés pour la prochaine fois). C'est fait au premier contrôle, appli ouverte ou surveillance en arrière-plan ; sinon il se répéterait chaque semaine. « Annuler » le désactive tout de suite.
+
+## 12. Surveillance en arrière-plan (v1.2)
+
+- Tâche WorkManager **toutes les 15 min**, le minimum d'Android, sans notification permanente. Android choisit le moment exact et peut espacer les contrôles en veille. Désactivable dans Appareil ; activée par défaut.
+- À chaque contrôle, uniquement sur le Wi-Fi, avec l'IP mémorisée :
+  - lecture de l'état (catégorie 2) ;
+  - fin de l'arrêt programmé échu (§11), avec une notification « Minuterie terminée » ;
+  - notification « Alarme du poêle » quand une alarme **apparaît** (`alr`, r3 ≠ 0, états 10/11), une seule fois par alarme.
+- Permission `POST_NOTIFICATIONS`, demandée au lancement.
 
 ## 8. Références
 

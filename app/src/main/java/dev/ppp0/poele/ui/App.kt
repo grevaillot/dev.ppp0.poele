@@ -56,6 +56,8 @@ import dev.ppp0.poele.net.Bcd
 import dev.ppp0.poele.net.ChronoRules
 import dev.ppp0.poele.net.ModuleCodes
 import dev.ppp0.poele.net.Registers
+import dev.ppp0.poele.monitor.MonitorWorker
+import dev.ppp0.poele.net.StoveOps
 import dev.ppp0.poele.update.FeedStatus
 import java.time.Duration
 import java.time.LocalDateTime
@@ -212,6 +214,7 @@ private fun HomeScreen(vm: StoveViewModel) {
                     note = if (vm.canWrite(Registers.FAN) || r[Registers.DUCT_CONFIG] == null) null else "Lecture seule sur cette canalisation")
             }
         }
+        item { TimerSection(vm) }
         item {
             Section("Dernières 24 h") {
                 val t = thermal
@@ -275,6 +278,23 @@ private fun DeviceScreen(vm: StoveViewModel, conn: Conn.Connected) {
                 LabeledValue("Masque / passerelle", "${t("currentMask")} / ${t("currentGw")}")
                 LabeledValue("Dernière déconnexion", ModuleCodes.DISCONNECT[i("lastDisconnectReason")] ?: i("lastDisconnectReason")?.toString() ?: "—")
                 LabeledValue("Cloud", ModuleCodes.CLOUD[i("client")] ?: "—")
+            }
+        }
+        item {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            var on by remember { mutableStateOf(MonitorWorker.enabled(ctx)) }
+            val last = StoveOps.prefs(ctx).getLong(MonitorWorker.KEY_LAST_CHECK, 0L)
+            Section("Surveillance en arrière-plan") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Contrôle toutes les 15 min", style = MaterialTheme.typography.bodyLarge)
+                        Text("Notifie les alarmes et termine l'arrêt programmé, appli fermée. Android peut espacer les contrôles en veille.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    androidx.compose.material3.Switch(on, { on = it; MonitorWorker.setEnabled(ctx, it) })
+                }
+                LabeledValue("Dernier contrôle", if (last == 0L) "—" else
+                    java.time.Instant.ofEpochMilli(last).atZone(java.time.ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd/MM HH:mm")))
             }
         }
         item {

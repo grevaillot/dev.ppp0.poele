@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.0 — 2026-11-21
+
+- Surveillance en arrière-plan toutes les 15 min : notification quand une alarme apparaît (désactivable dans Appareil).
+- Arrêt programmé (expérimental) : « éteindre dans X » via un programme chrono temporaire AUTO-OFF, désactivé automatiquement une fois l'échéance passée. Refusé si l'échéance tombe dans un programme actif.
+
 ## v1.0.0 — 2026-11-21
 
 Première version stable.

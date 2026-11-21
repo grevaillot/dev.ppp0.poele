@@ -100,6 +100,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
 
     testImplementation("junit:junit:4.13.2")
     // Vrai org.json pour les tests JVM (android.jar n'a que des stubs).

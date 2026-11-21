@@ -12,7 +12,10 @@ import dev.ppp0.poele.net.DiscoveryEvent
 import dev.ppp0.poele.net.Found
 import dev.ppp0.poele.net.LogEntry
 import dev.ppp0.poele.net.Registers
+import dev.ppp0.poele.net.OffTimer
 import dev.ppp0.poele.net.StoveClient
+import dev.ppp0.poele.net.StoveOps
+import dev.ppp0.poele.net.TimerInfo
 import dev.ppp0.poele.net.Thermal
 import dev.ppp0.poele.net.WifiInfo
 import dev.ppp0.poele.net.WifiNet
@@ -46,6 +49,8 @@ data class StoveState(
 class StoveViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("poele", Context.MODE_PRIVATE)
     private val client = StoveClient(prefs.getString("host", null) ?: "", null)
+    /** Opérations partagées avec la surveillance en arrière-plan (programmes, minuterie). */
+    private val ops = StoveOps(client, prefs)
 
     private val _conn = MutableStateFlow<Conn>(Conn.Searching(emptyList()))
     val conn: StateFlow<Conn> = _conn
@@ -133,7 +138,7 @@ class StoveViewModel(app: Application) : AndroidViewModel(app) {
                 val t0 = System.currentTimeMillis()
                 try {
                     val cats = mutableListOf(2, 6)
-                    if (forceSlow || t0 - slow > (if (clockScreenVisible) 5_000 else 30_000)) { cats += 4; slow = t0; forceSlow = false }
+                    if (forceSlow || t0 - slow > (if (clockScreenVisible) 5_000 else 30_000)) { cats += 4; slow = t0; forceSlow = false; cleanupTimer() }
                     var meta: JSONObject? = null
                     val fresh = mutableMapOf<Int, Int>()
                     for (c in cats) {
@@ -275,12 +280,7 @@ class StoveViewModel(app: Application) : AndroidViewModel(app) {
     fun loadChrono() {
         viewModelScope.launch {
             try {
-                val j = client.post("/ajax/get-registers", mapOf("key" to "033"))
-                val arr = j.getJSONArray("programs")
-                val list = (0 until Chrono.SLOTS).map { i ->
-                    if (i >= arr.length()) null else arr.getJSONArray(i).let { row -> ChronoRules.parse((0 until row.length()).map { row.get(it) }) }
-                }
-                _chrono.value = Chrono(j.optBoolean("enabled"), list)
+                _chrono.value = ops.readChrono()
                 _chronoDirty.value = false
             } catch (e: Exception) {
                 events.tryEmit("Lecture des programmes impossible : ${e.message}")
@@ -297,7 +297,7 @@ class StoveViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             try {
-                client.post("/ajax/get-registers", ChronoRules.encode(c))
+                ops.writeChrono(c)
                 events.tryEmit("Programmes enregistrés")
                 loadChrono()
             } catch (e: Exception) {
@@ -315,6 +315,60 @@ class StoveViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 events.tryEmit("Échec de la suppression : ${e.message}")
             }
+        }
+    }
+
+    // ------------------------------------------------------------ minuterie d'arrêt (expérimental, SPEC §11)
+
+    private val _timer = MutableStateFlow(ops.timer())
+    val timer: StateFlow<TimerInfo?> = _timer
+    private val _timerBusy = MutableStateFlow(false)
+    val timerBusy: StateFlow<Boolean> = _timerBusy
+
+    /** Programme l'arrêt dans [minutes] (horloge du poêle) ; le motif d'un refus s'affiche en message. */
+    fun scheduleOff(minutes: Int) {
+        if (_timerBusy.value) return
+        _timerBusy.value = true
+        viewModelScope.launch {
+            try {
+                val t = ops.scheduleOff(minutes, _state.value.regs)
+                _timer.value = t
+                events.tryEmit("Arrêt programmé à %02d:%02d (heure du poêle)".format(t.stoveDeadline.hour, t.stoveDeadline.minute))
+                if (_chrono.value != null && !_chronoDirty.value) loadChrono()
+            } catch (e: IllegalStateException) {
+                events.tryEmit(e.message ?: "Refusé")
+            } catch (e: Exception) {
+                events.tryEmit("Échec de la minuterie : ${e.message}")
+            } finally {
+                _timerBusy.value = false
+            }
+        }
+    }
+
+    fun cancelTimer() {
+        if (_timerBusy.value) return
+        _timerBusy.value = true
+        viewModelScope.launch {
+            try {
+                ops.disableTimer()
+                _timer.value = null
+                events.tryEmit("Minuterie annulée")
+                if (_chrono.value != null && !_chronoDirty.value) loadChrono()
+            } catch (e: Exception) {
+                events.tryEmit("Échec de l'annulation : ${e.message}")
+            } finally {
+                _timerBusy.value = false
+            }
+        }
+    }
+
+    /** Appelé par le polling : désactive le programme dès que l'échéance est passée. */
+    private suspend fun cleanupTimer() {
+        if (_timerBusy.value) return
+        _timer.value = ops.timer() // la surveillance en arrière-plan a pu la désactiver entre-temps
+        if (_timer.value == null) return
+        runCatching { ops.cleanupTimerIfDue() }.onSuccess { done ->
+            if (done) { _timer.value = null; events.tryEmit("Minuterie terminée : programme ${OffTimer.NAME} désactivé") }
         }
     }
 
