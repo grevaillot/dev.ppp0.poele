@@ -13,6 +13,7 @@ import dev.ppp0.poele.net.Found
 import dev.ppp0.poele.net.LogEntry
 import dev.ppp0.poele.net.Registers
 import dev.ppp0.poele.net.StoveClient
+import dev.ppp0.poele.net.Thermal
 import dev.ppp0.poele.net.WifiInfo
 import dev.ppp0.poele.net.WifiNet
 import dev.ppp0.poele.update.AppUpdater
@@ -313,6 +314,21 @@ class StoveViewModel(app: Application) : AndroidViewModel(app) {
                 events.tryEmit("Programme supprimé")
             } catch (e: Exception) {
                 events.tryEmit("Échec de la suppression : ${e.message}")
+            }
+        }
+    }
+
+    // ------------------------------------------------------------ courbe thermique (key=035)
+
+    private val _thermal = MutableStateFlow<Thermal?>(null)
+    val thermal: StateFlow<Thermal?> = _thermal
+
+    fun loadThermal() {
+        viewModelScope.launch {
+            runCatching {
+                val j = client.post("/ajax/get-registers", mapOf("key" to "035"))
+                fun ints(k: String) = j.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optInt(it) } }.orEmpty()
+                _thermal.value = Thermal.parse(ints("airTemp"), ints("setAirTemp"))
             }
         }
     }

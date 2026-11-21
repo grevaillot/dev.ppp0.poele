@@ -162,6 +162,9 @@ private fun HomeScreen(vm: StoveViewModel) {
     val s by vm.state.collectAsStateWithLifecycle()
     val pending by vm.pending.collectAsStateWithLifecycle()
     val upd by vm.updater.state.collectAsStateWithLifecycle()
+    val thermal by vm.thermal.collectAsStateWithLifecycle()
+    // Courbe : à l'affichage de l'accueil, puis toutes les 5 min (un point toutes les 20 min côté poêle).
+    LaunchedEffect(Unit) { while (true) { vm.loadThermal(); kotlinx.coroutines.delay(300_000) } }
     val r = s.regs
     val st = r[Registers.STATUS]
     val alarm = s.alarm()
@@ -207,6 +210,13 @@ private fun HomeScreen(vm: StoveViewModel) {
                 step(Registers.POWER, "Puissance", Registers::power)
                 step(Registers.FAN, "Ventilation", Registers::fan,
                     note = if (vm.canWrite(Registers.FAN) || r[Registers.DUCT_CONFIG] == null) null else "Lecture seule sur cette canalisation")
+            }
+        }
+        item {
+            Section("Dernières 24 h") {
+                val t = thermal
+                if (t == null) Text("Lecture…", style = MaterialTheme.typography.bodySmall)
+                else ThermalChart(t, Modifier.fillMaxWidth())
             }
         }
     }
