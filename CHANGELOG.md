@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.0 — 2026-11-22
+
+- Accueil façon thermostat : état et bouton marche/arrêt en tête, ambiante en très gros, consigne réglable juste dessous ; puissance et ventilation en deux petites cartes.
+- Plus de redites : l'état n'est plus répété dans la barre de titre (IP seule, ou « Hors ligne »), la consigne n'apparaît plus qu'une fois.
+- Screenshot du README mis à jour.
+
 ## v1.2.3 — 2026-11-21
 
 - Arrêt programmé : plus rien n'est mémorisé sur le téléphone. Un AUTO-OFF dont l'arrêt est passé d'après sa ligne de programme (date du nom, heure d'arrêt, horloge du poêle) est désactivé, quelle que soit l'appli ou le téléphone qui l'a programmé. Corrige une désactivation retardée quand le programme avait été réécrit.

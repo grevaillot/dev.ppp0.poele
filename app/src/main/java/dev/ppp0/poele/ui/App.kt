@@ -1,6 +1,16 @@
 package dev.ppp0.poele.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -97,7 +107,7 @@ fun App(vm: StoveViewModel) {
                 Column {
                     Text(s.name ?: "Poêle", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val sub = when (val c = conn) {
-                        is Conn.Connected -> (if (s.online) Registers.status(s.regs[Registers.STATUS]) else "Hors ligne") + " · ${c.found.ip}"
+                        is Conn.Connected -> (if (s.online) "" else "Hors ligne · ") + c.found.ip
                         is Conn.Searching -> "Recherche du module…"
                         is Conn.Failed -> "Module introuvable"
                     }
@@ -165,53 +175,77 @@ private fun HomeScreen(vm: StoveViewModel) {
     val pending by vm.pending.collectAsStateWithLifecycle()
     val upd by vm.updater.state.collectAsStateWithLifecycle()
     val thermal by vm.thermal.collectAsStateWithLifecycle()
-    // Courbe : à l'affichage de l'accueil, puis toutes les 5 min (un point toutes les 20 min côté poêle).
+    // Courbe : à l'affichage de l'accueil, puis toutes les 5 min (un point toutes les 15 min côté poêle).
     LaunchedEffect(Unit) { while (true) { vm.loadThermal(); kotlinx.coroutines.delay(300_000) } }
     val r = s.regs
     val st = r[Registers.STATUS]
     val alarm = s.alarm()
     var ask by remember { mutableStateOf<Boolean?>(null) }
 
-    @Composable
-    fun step(reg: Int, label: String, fmt: (Int?) -> String, note: String? = null) {
-        val p = pending[reg]
-        val color = when (p?.state) {
-            PendingState.Error -> StatusColors.error
-            null -> Color.Unspecified
-            else -> StatusColors.running
-        }
-        StepRow(label, fmt(p?.value ?: r[reg]), vm.canWrite(reg) && r[reg] != null, color, note,
-            onMinus = { vm.step(reg, -1) }, onPlus = { vm.step(reg, +1) })
+    fun valueColor(reg: Int) = when (pending[reg]?.state) {
+        PendingState.Error -> StatusColors.error
+        null -> Color.Unspecified
+        else -> StatusColors.running
     }
+    fun shown(reg: Int) = pending[reg]?.value ?: r[reg]
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PAGE, verticalArrangement = GAP) {
         if (upd.available != null) item { UpdateBanner(upd, vm.updater::download) }
+        // Carte thermostat : état + marche/arrêt, ambiante en vedette, consigne réglable (affichée une seule fois).
         item {
             Section(null) {
-                // Température ambiante en vedette, consigne à côté pour comparer d'un coup d'œil.
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(Registers.ambient(r[Registers.AMBIENT]), fontSize = 56.sp, fontWeight = FontWeight.Bold, lineHeight = 56.sp)
-                    Column(Modifier.padding(start = 12.dp, bottom = 8.dp)) {
-                        Text("ambiante", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("consigne ${Registers.setpoint(pending[Registers.SETPOINT]?.value ?: r[Registers.SETPOINT])}",
-                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val c = statusColor(st, alarm.isNotBlank())
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(c))
+                    Text(Registers.status(st), Modifier.weight(1f).padding(start = 8.dp), color = c,
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    if (st != null) {
+                        val on = st == 0
+                        val colors = if (on) IconButtonDefaults.filledIconButtonColors()
+                            else IconButtonDefaults.outlinedIconButtonColors()
+                        if (on) FilledIconButton(onClick = { ask = true }, Modifier.size(48.dp), colors = colors) {
+                            Icon(painterResource(R.drawable.ic_power), contentDescription = "Allumer")
+                        } else OutlinedIconButton(onClick = { ask = false }, Modifier.size(48.dp)) {
+                            Icon(painterResource(R.drawable.ic_power), contentDescription = "Éteindre")
+                        }
                     }
                 }
-                Text(Registers.status(st), color = statusColor(st, alarm.isNotBlank()), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 if (alarm.isNotBlank()) Text("Alarme : $alarm", color = StatusColors.error)
                 if (!s.online) Text(s.lastError ?: "Connexion…", color = StatusColors.error, style = MaterialTheme.typography.bodySmall)
-                if (st != null) {
-                    if (st == 0) Button(onClick = { ask = true }, Modifier.fillMaxWidth()) { Text("Allumer") }
-                    else OutlinedButton(onClick = { ask = false }, Modifier.fillMaxWidth()) { Text("Éteindre") }
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(Registers.ambient(r[Registers.AMBIENT]), fontSize = 64.sp, fontWeight = FontWeight.Bold, lineHeight = 64.sp)
+                    Text("ambiante", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val ok = vm.canWrite(Registers.SETPOINT) && r[Registers.SETPOINT] != null
+                        StepButton("−", ok, 48.dp) { vm.step(Registers.SETPOINT, -1) }
+                        Text(Registers.setpoint(shown(Registers.SETPOINT)), Modifier.width(110.dp), color = valueColor(Registers.SETPOINT),
+                            fontSize = 28.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                        StepButton("+", ok, 48.dp) { vm.step(Registers.SETPOINT, +1) }
+                    }
+                    Text("consigne", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
+        // Puissance et ventilation, en petit.
         item {
-            Section("Réglages") {
-                step(Registers.SETPOINT, "Consigne", Registers::setpoint)
-                step(Registers.POWER, "Puissance", Registers::power)
-                step(Registers.FAN, "Ventilation", Registers::fan,
-                    note = if (vm.canWrite(Registers.FAN) || r[Registers.DUCT_CONFIG] == null) null else "Lecture seule sur cette canalisation")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for ((reg, label, fmt) in listOf(
+                    Triple(Registers.POWER, "Puissance", Registers::power),
+                    Triple(Registers.FAN, "Ventilation", Registers::fan),
+                )) {
+                    Section(null, Modifier.weight(1f)) {
+                        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val ok = vm.canWrite(reg) && r[reg] != null
+                            StepButton("−", ok, 36.dp) { vm.step(reg, -1) }
+                            Text(fmt(shown(reg)), Modifier.weight(1f), color = valueColor(reg), fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 1)
+                            StepButton("+", ok, 36.dp) { vm.step(reg, +1) }
+                        }
+                        if (reg == Registers.FAN && !vm.canWrite(reg) && r[Registers.DUCT_CONFIG] != null)
+                            Text("Lecture seule", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
         item {
